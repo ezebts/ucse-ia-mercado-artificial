@@ -43,8 +43,8 @@ def get_metodo(algoritmo):
 
 
 class MercadoArtificial(SearchProblem):
-    def __init__(self, ciudades, caminos, camiones, paquetes):
-        self.mapa = do_dict(ciudades, caminos)
+    def __init__(self, ciudades, sedes, caminos, camiones, paquetes):
+        self.mapa = do_mapa(ciudades, caminos, sedes)
         initial_state = do_state(camiones, paquetes)
         super(MercadoArtificial, self).__init__(initial_state)
 
@@ -104,6 +104,8 @@ def planear_camiones(metodo, camiones, paquetes):
         'santa_fe'
     )
 
+    sedes = ['rafaela', 'santa_fe']
+    
     caminos = (
         ('sunchales', 32, 'lehmann'),
         ('lehman', 8, 'rafaela'),
@@ -119,6 +121,6 @@ def planear_camiones(metodo, camiones, paquetes):
         ('santo_tome', 15, 'sauce_viejo')
     )
 
-    problem = MercadoArtificial(ciudades, caminos, camiones, paquetes)
+    problem = MercadoArtificial(ciudades, sedes,  caminos, camiones, paquetes)
 
     metodo(problem)
