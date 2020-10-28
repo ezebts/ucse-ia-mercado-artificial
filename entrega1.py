@@ -1,6 +1,10 @@
-import importlib
 from collections import namedtuple
-from simpleai.search import SearchProblem
+from simpleai.search import SearchProblem, astar, breadth_first, depth_first, uniform_cost, greedy, viewers
+
+ALGORITMOS_VALIDOS = [astar, breadth_first, depth_first, uniform_cost, greedy]
+CONSUME_1LITRO_CADA_KMS = 100
+
+__all__ = ['planear_camiones']
 
 
 def do_mapa(ciudades, caminos, sedes=[]):
@@ -12,14 +16,14 @@ def do_mapa(ciudades, caminos, sedes=[]):
     for camino in caminos:
         ciudad1, costo, ciudad2 = camino
 
-        assert ciudad1 not in mapa, f"'{ciudad1}' no está en el mapa!"
-        assert ciudad2 not in mapa, f"'{ciudad2}' no está en el mapa!"
+        assert ciudad1 in mapa, f"'{ciudad1}' no está en el mapa!"
+        assert ciudad2 in mapa, f"'{ciudad2}' no está en el mapa!"
 
         mapa[ciudad1][ciudad2] = costo
         mapa[ciudad2][ciudad1] = costo
 
     for sede in sedes:
-        assert sede not in mapa, f"La sede '{sede}' no está en el mapa!"
+        assert sede in mapa, f"La sede '{sede}' no está en el mapa!"
 
     Mapa = namedtuple('Mapa', 'ciudades sedes')
 
@@ -27,19 +31,29 @@ def do_mapa(ciudades, caminos, sedes=[]):
 
 
 def do_state(camiones, paquetes):
-    camiones = tuple((camion[0], camion[1], camion[2], camion[2])
+    """
+    El estado es una tupla de tuplas:
+    - Un camion es una tupla (id, ciudad_donde_esta, capacidad_tanque, combustible_actual)
+    - Un paquete es una tupla (id, ciudad_donde_esta, ciudad_destino_final)
+    """
+    camiones = tuple((camion + (camion[2],))
                      for camion in camiones)
-    paquetes = tuple((paquete[0], paquete[1], paquete[2])
-                     for paquete in paquetes)
+    paquetes = tuple(paquetes)
 
     return camiones, paquetes
 
 
 def get_metodo(algoritmo):
-    try:
-        return importlib.import_module(algoritmo, 'simpleai.search')
-    except ModuleNotFoundError:
-        print(f"Algoritmo {algoritmo} no soportado")
+    usar = [solver for solver in ALGORITMOS_VALIDOS if solver.__name__ is algoritmo]
+
+    if len(usar) == 0:
+        raise ValueError(f"Algoritmo '{algoritmo}' no soportado")
+
+    return usar[0]
+
+
+def get_costo_litros(distancia_kms):
+    return distancia_kms / CONSUME_1LITRO_CADA_KMS
 
 
 class MercadoArtificial(SearchProblem):
@@ -49,25 +63,76 @@ class MercadoArtificial(SearchProblem):
         super(MercadoArtificial, self).__init__(initial_state)
 
     def actions(self, state):
-        pass
-
-    def cost(self, s1, action, s2):
-        camiones = s1[0]
-        mover_camion = action[0]
-        ciudad_destino = action[1]
+        camiones, paquetes = state
+        acciones = []
 
         for camion in camiones:
-            id_camion = camion[0]
-            ciudad_origen = camion[1]
+            camion_viaja, ciudad_actual, combustible = camion[0], camion[1], camion[3]
+            lleva_paquetes = []
 
-            if id_camion == mover_camion:
-                return self.mapa.ciudades[ciudad_origen][ciudad_destino]
+            for paquete in paquetes:
+                # posicion es la ciudad donde esta el paquete
+                paquete_id, posicion, paquete_destino = paquete
+                entregado = posicion == paquete_destino
+                puede_agarrar = posicion == ciudad_actual
+
+                if not entregado and puede_agarrar:
+                    lleva_paquetes.append(paquete_id)
+
+            conectadas = tuple(
+                ciudad for ciudad in self.mapa.ciudades[ciudad_actual].items())
+
+            for ciudad_conectada in conectadas:
+                a_destino, distancia = ciudad_conectada
+                costo_a_destino = get_costo_litros(distancia)
+
+                if combustible >= costo_a_destino:
+                    acciones.append(
+                        (camion_viaja, ciudad_actual, a_destino, costo_a_destino, tuple(lleva_paquetes)))
+
+        return acciones
+
+    def cost(self, s1, action, s2):
+        desde_ciudad, a_destino = action[1], action[2]
+        return get_costo_litros(self.mapa.ciudades[desde_ciudad][a_destino])
 
     def heuristic(self, state):
-        pass
+        paquetes = state[1]
+        return len([paquete for paquete in paquetes if paquete[1] != paquete[2]])
 
     def result(self, state, action):
-        pass
+        costo = action[3]
+        camiones, paquetes = state
+        paquetes_transportados = action[4]
+        mover_camion, a_ciudad = action[0], action[2]
+
+        resultado_camiones = []
+
+        for camion in camiones:
+            id_camion, posicion, capacidad, combustible = camion
+
+            if id_camion == mover_camion:
+                if posicion in self.mapa.sedes:
+                    combustible = capacidad
+
+                posicion = a_ciudad
+                combustible -= costo
+
+            resultado_camiones.append(
+                (id_camion, posicion, capacidad, combustible))
+
+        resultado_paquetes = []
+
+        for paquete in paquetes:
+            id_paquete, ciudad_actual, ciudad_final = paquete
+
+            if id_paquete in paquetes_transportados:
+                ciudad_actual = a_ciudad
+
+            resultado_paquetes.append(
+                (id_paquete, ciudad_actual, ciudad_final))
+
+        return tuple(resultado_camiones), tuple(resultado_paquetes)
 
     def is_goal(self, state):
         camiones, paquetes = state
@@ -88,10 +153,25 @@ class MercadoArtificial(SearchProblem):
         return True
 
 
-def planear_camiones(metodo, camiones, paquetes):
+def itinerario(solution):
+    viajes = []
+
+    for viaje, estado in solution.path():
+        if viaje:
+            camion, origen, destino, costo, paquetes = viaje
+            viajes.append((camion, destino, costo, paquetes))
+
+    return viajes
+
+
+def planear_camiones(metodo, camiones, paquetes, viewer=None):
+    metodo = get_metodo(metodo)
+
+    print("METODO: ", metodo)
+
     ciudades = (
         'sunchales',
-        'lehman',
+        'lehmann',
         'rafaela',
         'susana',
         'angelica',
@@ -105,10 +185,10 @@ def planear_camiones(metodo, camiones, paquetes):
     )
 
     sedes = ['rafaela', 'santa_fe']
-    
+
     caminos = (
         ('sunchales', 32, 'lehmann'),
-        ('lehman', 8, 'rafaela'),
+        ('lehmann', 8, 'rafaela'),
         ('rafaela', 10, 'susana'),
         ('susana', 25, 'angelica'),
         ('angelica', 18, 'san_vicente'),
@@ -121,6 +201,21 @@ def planear_camiones(metodo, camiones, paquetes):
         ('santo_tome', 15, 'sauce_viejo')
     )
 
-    problem = MercadoArtificial(ciudades, sedes,  caminos, camiones, paquetes)
+    problem = MercadoArtificial(ciudades, sedes, caminos, camiones, paquetes)
 
-    metodo(problem)
+    return itinerario(metodo(problem, viewer=viewer))
+
+
+if __name__ == "__main__":
+    planear_camiones(
+        metodo='breadth_first',
+        camiones=[
+            # id, ciudad de origen, y capacidad de combustible máxima (litros)
+            ('c1', 'rafaela', 1.5),
+        ],
+        paquetes=[
+            # id, ciudad de origen, y ciudad de destino
+            ('p1', 'rafaela', 'angelica'),
+        ],
+        viewer=viewers.ConsoleViewer()
+    )
