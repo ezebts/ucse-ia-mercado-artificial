@@ -9,6 +9,7 @@ __all__ = ['planear_camiones']
 
 def do_mapa(ciudades, caminos, sedes=[]):
     mapa = dict()
+    menor_costo_camino = 0
 
     for ciudad in ciudades:
         mapa[ciudad] = dict()
@@ -16,6 +17,9 @@ def do_mapa(ciudades, caminos, sedes=[]):
     for camino in caminos:
         ciudad1, costo, ciudad2 = camino
 
+        if (costo < menor_costo_camino) or (menor_costo_camino == 0):
+            menor_costo_camino = costo
+        
         assert ciudad1 in mapa, f"'{ciudad1}' no está en el mapa!"
         assert ciudad2 in mapa, f"'{ciudad2}' no está en el mapa!"
 
@@ -25,9 +29,9 @@ def do_mapa(ciudades, caminos, sedes=[]):
     for sede in sedes:
         assert sede in mapa, f"La sede '{sede}' no está en el mapa!"
 
-    Mapa = namedtuple('Mapa', 'ciudades sedes')
+    Mapa = namedtuple('Mapa', 'ciudades sedes menor_costo_camino')
 
-    return Mapa(ciudades=mapa, sedes=sedes)
+    return Mapa(ciudades=mapa, sedes=sedes, menor_costo_camino=menor_costo_camino)
 
 
 def do_state(camiones, paquetes):
@@ -97,12 +101,10 @@ class MercadoArtificial(SearchProblem):
         return get_costo_litros(self.mapa.ciudades[desde_ciudad][a_destino])
 
     def heuristic(self, state):
-        camiones, paquetes = state
-        camiones_circulando = len(
-            [camion for camion in camiones if camion[1] not in self.mapa.sedes])
+        paquetes = state[1]
         paquetes_sin_entregar = len(
             [paquete for paquete in paquetes if paquete[1] != paquete[2]])
-        return paquetes_sin_entregar * 0.05
+        return paquetes_sin_entregar * get_costo_litros(self.mapa.menor_costo_camino)
 
     def result(self, state, action):
         costo = action[3]
@@ -116,11 +118,12 @@ class MercadoArtificial(SearchProblem):
             id_camion, posicion, capacidad, combustible = camion
 
             if id_camion == mover_camion:
+                posicion = a_ciudad
+
                 if posicion in self.mapa.sedes:
                     combustible = capacidad
-
-                posicion = a_ciudad
-                combustible -= costo
+                else:
+                    combustible -= costo
 
             resultado_camiones.append(
                 (id_camion, posicion, capacidad, combustible))
