@@ -19,7 +19,7 @@ def do_mapa(ciudades, caminos, sedes=[]):
 
         if (costo < menor_costo_camino) or (menor_costo_camino == 0):
             menor_costo_camino = costo
-        
+
         assert ciudad1 in mapa, f"'{ciudad1}' no está en el mapa!"
         assert ciudad2 in mapa, f"'{ciudad2}' no está en el mapa!"
 
@@ -174,8 +174,6 @@ def itinerario(solution):
 def planear_camiones(metodo, camiones, paquetes, viewer=None):
     metodo = get_metodo(metodo)
 
-    print("METODO: ", metodo)
-
     ciudades = (
         'sunchales',
         'lehmann',
@@ -214,7 +212,7 @@ def planear_camiones(metodo, camiones, paquetes, viewer=None):
 
 
 if __name__ == "__main__":
-    # Caso de juguete
+    # Caso de juguete con viewer para revisar
     planear_camiones(
         metodo='breadth_first',
         camiones=[
