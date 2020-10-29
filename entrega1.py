@@ -97,8 +97,12 @@ class MercadoArtificial(SearchProblem):
         return get_costo_litros(self.mapa.ciudades[desde_ciudad][a_destino])
 
     def heuristic(self, state):
-        paquetes = state[1]
-        return len([paquete for paquete in paquetes if paquete[1] != paquete[2]])
+        camiones, paquetes = state
+        camiones_circulando = len(
+            [camion for camion in camiones if camion[1] not in self.mapa.sedes])
+        paquetes_sin_entregar = len(
+            [paquete for paquete in paquetes if paquete[1] != paquete[2]])
+        return paquetes_sin_entregar * 0.05
 
     def result(self, state, action):
         costo = action[3]
@@ -203,10 +207,11 @@ def planear_camiones(metodo, camiones, paquetes, viewer=None):
 
     problem = MercadoArtificial(ciudades, sedes, caminos, camiones, paquetes)
 
-    return itinerario(metodo(problem, viewer=viewer))
+    return itinerario(metodo(problem, graph_search=True, viewer=viewer))
 
 
 if __name__ == "__main__":
+    # Caso de juguete
     planear_camiones(
         metodo='breadth_first',
         camiones=[
