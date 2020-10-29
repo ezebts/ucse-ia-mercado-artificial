@@ -97,8 +97,7 @@ class MercadoArtificial(SearchProblem):
         return acciones
 
     def cost(self, s1, action, s2):
-        desde_ciudad, a_destino = action[1], action[2]
-        return get_costo_litros(self.mapa.ciudades[desde_ciudad][a_destino])
+        return action[3]
 
     def heuristic(self, state):
         paquetes = state[1]
